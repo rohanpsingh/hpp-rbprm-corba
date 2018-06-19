@@ -1834,7 +1834,7 @@ assert(s2 == s1 +1);
         for(std::vector<rbprm::State>::iterator cit2 = lastStatesComputed_.begin()+2;
             cit2 != lastStatesComputed_.end()-1; ++cit2, ++cit, ++i)
         {
-            cit2->robustness = stability::IsStable(this->fullBody_, *cit2);
+	  cit2->robustness = stability::IsStable(this->fullBody_, *cit2);
             ss << i<< " ";
             cit2->print(ss,*cit);
         }
@@ -2053,6 +2053,53 @@ assert(s2 == s1 +1);
         {
             return (CORBA::Short)(0);
         }
+        }
+        catch(std::runtime_error& e)
+        {
+            throw Error(e.what());
+        }
+    }
+
+
+      hpp::floatSeq* RbprmBuilder::getConfigContactForces(const hpp::floatSeq& configuration, const hpp::Names_t& contactLimbs, double robustnessTreshold) throw (hpp::Error)
+    {
+        try{
+        rbprm::State testedState;
+        model::Configuration_t config = dofArrayToConfig (fullBody_->device_, configuration);
+        model::Configuration_t save = fullBody_->device_->currentConfiguration();
+        std::vector<std::string> names = stringConversion(contactLimbs);
+        fullBody_->device_->currentConfiguration(config);
+        fullBody_->device_->computeForwardKinematics();
+        for(std::vector<std::string>::const_iterator cit = names.begin(); cit != names.end();++cit)
+        {
+            const hpp::rbprm::RbPrmLimbPtr_t limb =fullBody_->GetLimbs().at(std::string(*cit));
+            testedState.contacts_[*cit] = true;
+            testedState.contactPositions_[*cit] = limb->effector_->currentTransformation().getTranslation();
+            testedState.contactRotation_[*cit] = limb->effector_->currentTransformation().getRotation();
+            // normal given by effector normal
+            const fcl::Vec3f normal = limb->effector_->currentTransformation().getRotation() * limb->normal_;
+            testedState.contactNormals_[*cit] = normal;
+            testedState.configuration_ = config;
+            ++testedState.nbContacts;
+        }
+        fullBody_->device_->currentConfiguration(save);
+        fullBody_->device_->computeForwardKinematics();
+	Eigen::MatrixXd forces = stability::computeContactForces(fullBody_, testedState, robust_equilibrium::STATIC_EQUILIBRIUM_ALGORITHM_LP);
+	Eigen::Map<Eigen::RowVectorXd> force_vec(forces.transpose().data(), forces.size());
+	hpp::floatSeq* forceseq = new hpp::floatSeq();
+	forceseq->length(force_vec.size());
+        for(std::size_t i=0; i<force_vec.size(); ++i)
+	  (*forceseq)[(_CORBA_ULong)i] = force_vec(i);
+
+	std::cout << "computing force magnitudes... " << std::endl;
+	Eigen::Vector3d sum_of_forces;
+	for (unsigned int i = 0; i < forces.rows(); i++) {
+	  sum_of_forces += forces.row(i);
+	  Eigen::Vector3d force_dir = forces.row(i);
+	  force_dir.normalize();
+	  std::cout << force_dir.transpose() << std::endl;
+	}
+	return forceseq;
         }
         catch(std::runtime_error& e)
         {

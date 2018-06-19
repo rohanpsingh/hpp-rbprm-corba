@@ -595,6 +595,18 @@ class FullBody (object):
 			return True
 		else:
 			return False
+
+
+###################### make custom method to get config contact forces #############################
+	## Given start and goal states
+	#  generate a contact sequence over a list of configurations
+	#
+    # \param stepSize discretization step
+    # \param pathId Id of the path to compute from
+    def getConfigContactForces(self, config, names, robustness = 0):
+		return (self.client.rbprm.rbprm.getConfigContactForces(config, names, robustness))
+###################### make custom method to get config contact forces #############################
+
 		
 	## Updates limb databases with a user chosen computation
 	#
